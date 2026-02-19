@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TRAC Alert System — Real-Time Wallet Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #080b10;
+    --surface: #0d1117;
+    --card: #111620;
+    --border: #1e2a3a;
+    --accent: #00f5a0;
+    --accent2: #00b8ff;
+    --danger: #ff4d6d;
+    --warn: #ffd60a;
+    --text: #e8edf3;
+    --muted: #5a6a7a;
+    --glow: 0 0 20px rgba(0,245,160,0.25);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* BACKGROUND GRID */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,245,160,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,245,160,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* SCANLINE OVERLAY */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px 16px 60px;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 0 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+  }
+  .logo-mark {
+    width: 48px; height: 48px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: #000;
+    flex-shrink: 0;
+    box-shadow: var(--glow);
+  }
+  header h1 {
+    font-size: clamp(20px, 4vw, 28px);
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+  header h1 span { color: var(--accent); }
+  .badge {
+    margin-left: auto;
+    background: rgba(0,245,160,0.1);
+    border: 1px solid rgba(0,245,160,0.3);
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .pulse-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    margin-right: 6px;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  /* WALLET INPUT SECTION */
+  .section { margin-bottom: 28px; }
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .wallet-row {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+  }
+  input[type="text"], input[type="number"], select {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+  }
+  input[type="text"]:focus, input[type="number"]:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0,245,160,0.15);
+  }
+  select option { background: var(--card); }
+
+  button {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #000;
+  }
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(0,245,160,0.4);
+  }
+  .btn-danger {
+    background: rgba(255,77,109,0.15);
+    color: var(--danger);
+    border: 1px solid rgba(255,77,109,0.3);
+  }
+  .btn-danger:hover { background: rgba(255,77,109,0.25); }
+  .btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+  }
+
+  /* ALERT RULES */
+  .rules-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 600px) { .rules-grid { grid-template-columns: 1fr; } }
+
+  .rule-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    transition: border-color 0.2s;
+  }
+  .rule-card.active { border-color: rgba(0,245,160,0.4); }
+  .rule-card label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    margin-bottom: 12px;
+  }
+  .rule-card label input[type="checkbox"] {
+    width: 18px; height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .rule-name {
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .rule-icon { font-size: 18px; }
+  .rule-card .sub {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .rule-threshold {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .rule-threshold label { margin-bottom: 0; font-size: 12px; color: var(--muted); }
+
+  /* MONITORING STATUS */
+  .status-bar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+  }
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .dot.online { background: var(--accent); animation: pulse 1.5s infinite; box-shadow: 0 0 8px var(--accent); }
+  .dot.offline { background: var(--danger); }
+  .status-stats {
+    margin-left: auto;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    text-align: right;
+  }
+  .stat-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* CHAT / ALERT FEED */
+  .chat-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .chat-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .chat-header span:first-child { color: var(--accent); font-size: 14px; }
+  .clear-btn {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-family: 'Space Mono', monospace;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .clear-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  .chat-messages {
+    height: 320px;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scroll-behavior: smooth;
+  }
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .chat-messages::-webkit-scrollbar-track { background: transparent; }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .msg {
+    display: flex;
+    gap: 10px;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .msg-avatar {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .msg.user .msg-avatar { background: rgba(0,184,255,0.15); }
+  .msg.bot .msg-avatar { background: rgba(0,245,160,0.15); }
+  .msg.alert-in .msg-avatar { background: rgba(0,245,160,0.2); }
+  .msg.alert-out .msg-avatar { background: rgba(255,77,109,0.15); }
+  .msg.alert-big .msg-avatar { background: rgba(255,214,10,0.15); }
+
+  .msg-body {}
+  .msg-meta {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .msg-text {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0 8px 8px 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    max-width: 500px;
+  }
+  .msg.user .msg-text {
+    background: rgba(0,184,255,0.08);
+    border-color: rgba(0,184,255,0.2);
+    margin-left: auto;
+    border-radius: 8px 0 8px 8px;
+  }
+  .msg.user { flex-direction: row-reverse; }
+  .msg.user .msg-meta { text-align: right; }
+
+  .msg-text.alert {
+    border-left: 3px solid var(--accent);
+  }
+  .msg-text.alert-danger { border-left-color: var(--danger); }
+  .msg-text.alert-warn { border-left-color: var(--warn); }
+
+  .alert-tag {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-bottom: 6px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .tag-in { background: rgba(0,245,160,0.15); color: var(--accent); }
+  .tag-out { background: rgba(255,77,109,0.15); color: var(--danger); }
+  .tag-big { background: rgba(255,214,10,0.15); color: var(--warn); }
+  .tag-drop { background: rgba(255,77,109,0.15); color: var(--danger); }
+  .tag-bot { background: rgba(0,245,160,0.1); color: var(--accent); }
+
+  /* CHAT INPUT */
+  .chat-input-row {
+    display: flex;
+    gap: 8px;
+    padding: 14px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .chat-input-row input {
+    font-size: 13px;
+    border-radius: 8px;
+  }
+  .chat-input-row button {
+    padding: 12px 18px;
+    font-size: 13px;
+  }
+
+  /* TX HISTORY */
+  .tx-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .tx-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    animation: fadeIn 0.4s ease;
+  }
+  .tx-type {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .tx-type.in { background: rgba(0,245,160,0.12); }
+  .tx-type.out { background: rgba(255,77,109,0.12); }
+  .tx-amount { font-weight: 700; font-size: 14px; }
+  .tx-amount.in { color: var(--accent); }
+  .tx-amount.out { color: var(--danger); }
+  .tx-from { color: var(--muted); font-size: 11px; }
+  .tx-hash { color: var(--muted); font-size: 10px; margin-left: auto; }
+
+  /* EMPTY STATE */
+  .empty {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+  }
+  .empty-icon { font-size: 32px; margin-bottom: 12px; }
+
+  /* SECTION HEADER */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  /* TOAST */
+  #toast-container {
+    position: fixed;
+    top: 20px; right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .toast {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    min-width: 260px;
+    max-width: 340px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    animation: slideIn 0.3s ease;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .toast.green { border-left: 3px solid var(--accent); }
+  .toast.red { border-left: 3px solid var(--danger); }
+  .toast.yellow { border-left: 3px solid var(--warn); }
+  .toast-icon { font-size: 20px; flex-shrink: 0; }
+  .toast-title { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+  .toast-msg { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="toast-container"></div>
+
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-mark">⚡</div>
+    <div>
+      <h1>TRAC <span>Alert</span> System</h1>
+      <div style="font-size:12px;color:var(--muted);font-family:'Space Mono',monospace;margin-top:2px;">Real-Time Wallet Monitor · Intercom Network</div>
+    </div>
+    <div class="badge"><span class="pulse-dot"></span>LIVE</div>
+  </header>
+
+  <!-- WALLET SETUP -->
+  <div class="section">
+    <div class="section-label">// 01 — Wallet Configuration</div>
+    <div class="wallet-row">
+      <input type="text" id="wallet-input" placeholder="Enter TRAC wallet address (bc1q... or tb1q...)" />
+      <button class="btn-primary" onclick="setWallet()">Monitor</button>
+    </div>
+    <div style="margin-top:8px;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);">
+      Demo mode: type any address and click Monitor to simulate live transactions
+    </div>
+  </div>
+
+  <!-- ALERT RULES -->
+  <div class="section">
+    <div class="section-label">// 02 — Alert Rules</div>
+    <div class="rules-grid">
+      <div class="rule-card" id="rule-incoming">
+        <label>
+          <input type="checkbox" id="rule-in" checked onchange="updateRule('in',this)" />
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="rule-icon">📥</span>
+              <span class="rule-name">Incoming TX Alert</span>
+            </div>
+            <div class="sub">Alert on any incoming transaction</div>
+          </div>
+        </label>
+        <div class="rule-threshold">
+          <span style="font-size:12px;color:var(--muted);">Min amount:</span>
+          <input type="number" id="threshold-in" value="0" min="0" style="width:100px;" />
+          <span style="font-family:'Space Mono',monospace;font-size:12px;color:var(--accent);">TNK</span>
+        </div>
+      </div>
+
+      <div class="rule-card" id="rule-outgoing">
+        <label>
+          <input type="checkbox" id="rule-out" checked onchange="updateRule('out',this)" />
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="rule-icon">📤</span>
+              <span class="rule-name">Outgoing TX Alert</span>
+            </div>
+            <div class="sub">Alert on any outgoing transaction</div>
+          </div>
+        </label>
+        <div class="rule-threshold">
+          <span style="font-size:12px;color:var(--muted);">Min amount:</span>
+          <input type="number" id="threshold-out" value="50" min="0" style="width:100px;" />
+          <span style="font-family:'Space Mono',monospace;font-size:12px;color:var(--danger);">TNK</span>
+        </div>
+      </div>
+
+      <div class="rule-card" id="rule-large">
+        <label>
+          <input type="checkbox" id="rule-large-chk" checked onchange="updateRule('large',this)" />
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="rule-icon">🐋</span>
+              <span class="rule-name">Whale Transaction</span>
+            </div>
+            <div class="sub">Alert on large single transactions</div>
+          </div>
+        </label>
+        <div class="rule-threshold">
+          <span style="font-size:12px;color:var(--muted);">Threshold:</span>
+          <input type="number" id="threshold-large" value="500" min="0" style="width:100px;" />
+          <span style="font-family:'Space Mono',monospace;font-size:12px;color:var(--warn);">TNK</span>
+        </div>
+      </div>
+
+      <div class="rule-card" id="rule-drop">
+        <label>
+          <input type="checkbox" id="rule-drop-chk" checked onchange="updateRule('drop',this)" />
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="rule-icon">📉</span>
+              <span class="rule-name">Balance Drop Alert</span>
+            </div>
+            <div class="sub">Alert when balance drops significantly</div>
+          </div>
+        </label>
+        <div class="rule-threshold">
+          <span style="font-size:12px;color:var(--muted);">Drop %:</span>
+          <input type="number" id="threshold-drop" value="20" min="1" max="100" style="width:80px;" />
+          <span style="font-family:'Space Mono',monospace;font-size:12px;color:var(--danger);">%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS -->
+  <div class="section">
+    <div class="section-label">// 03 — Monitor Status</div>
+    <div class="status-bar">
+      <div class="status-indicator">
+        <div class="dot" id="status-dot"></div>
+        <span id="status-text" style="color:var(--muted);">Not monitoring</span>
+      </div>
+      <div id="wallet-display" style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);"></div>
+      <div class="status-stats">
+        <div class="stat">
+          <div class="stat-val" id="balance-display">—</div>
+          <div class="stat-label">Balance (TNK)</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="alert-count">0</div>
+          <div class="stat-label">Alerts Fired</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="tx-count">0</div>
+          <div class="stat-label">TX Detected</div>
+        </div>
+      </div>
+      <button class="btn-danger btn-sm" id="stop-btn" onclick="stopMonitoring()" style="display:none;">Stop</button>
+    </div>
+  </div>
+
+  <!-- CHAT INTERFACE -->
+  <div class="section">
+    <div class="section-label">// 04 — Agent Chat Interface</div>
+    <div class="chat-panel">
+      <div class="chat-header">
+        <span>💬</span>
+        <span>TRAC Alert Bot</span>
+        <span style="color:var(--accent);margin-left:4px;" id="chat-status">● Standby</span>
+        <button class="clear-btn" onclick="clearChat()">Clear</button>
+      </div>
+      <div class="chat-messages" id="chat-messages">
+        <div class="msg bot">
+          <div class="msg-avatar">🤖</div>
+          <div class="msg-body">
+            <div class="msg-meta">TRAC Bot · Just now</div>
+            <div class="msg-text">
+              <span class="alert-tag tag-bot">TRAC AGENT</span><br/>
+              👋 Hello! I'm your TRAC Alert Agent.<br/><br/>
+              Enter your wallet address above and start monitoring. I'll send you real-time alerts for:<br/>
+              • Incoming/outgoing transactions<br/>
+              • Whale movements (large TX)<br/>
+              • Sudden balance drops<br/><br/>
+              You can also chat with me directly. Try: <em>"Alert me if I receive more than 100 TNK"</em>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder='e.g. "Alert me if I receive more than 100 TNK"' onkeydown="if(event.key==='Enter')sendChat()" />
+        <button class="btn-primary" onclick="sendChat()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TX HISTORY -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-label" style="margin-bottom:0">// 05 — Transaction Feed</div>
+      <button class="clear-btn" onclick="clearTx()">Clear</button>
+    </div>
+    <div class="tx-list" id="tx-list">
+      <div class="empty"><div class="empty-icon">📡</div>Waiting for transactions...</div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div style="border-top:1px solid var(--border);padding-top:20px;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);text-align:center;line-height:2;">
+    TRAC Alert System · Built on Intercom Network<br/>
+    TRAC Address: <span style="color:var(--accent);">YOUR_TRAC_ADDRESS_HERE</span><br/>
+    Fork: <a href="https://github.com/Trac-Systems/intercom" style="color:var(--accent2);">github.com/Trac-Systems/intercom</a>
+  </div>
+
+</div>
+
+<script>
+  // =================== STATE ===================
+  const state = {
+    wallet: null,
+    monitoring: false,
+    balance: 0,
+    prevBalance: 0,
+    alertCount: 0,
+    txCount: 0,
+    interval: null,
+    rules: { in: true, out: true, large: true, drop: true }
+  };
+
+  const txLog = [];
+  const NAMES = ['Satoshi','CryptoWhale','TRACHolder','AnonDev','LiquidityBot','NFTTrader','StakingPool','DeFiYield'];
+
+  // =================== UTILS ===================
+  function randomBetween(a,b){ return Math.random()*(b-a)+a; }
+  function randomInt(a,b){ return Math.floor(randomBetween(a,b+1)); }
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+  function shortAddr(a){ return a.slice(0,8)+'...'+a.slice(-6); }
+  function now(){ 
+    const d = new Date();
+    return d.toLocaleTimeString('en-US',{hour12:false});
+  }
+  function randomHash(){
+    const chars='0123456789abcdef';
+    let h='';
+    for(let i=0;i<12;i++) h+=chars[Math.floor(Math.random()*16)];
+    return h+'...';
+  }
+
+  // =================== TOAST ===================
+  function showToast(icon, title, msg, type='green'){
+    const c = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = `toast ${type}`;
+    t.innerHTML = `<div class="toast-icon">${icon}</div><div><div class="toast-title">${title}</div><div class="toast-msg">${msg}</div></div>`;
+    c.appendChild(t);
+    setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(20px)'; t.style.transition='all 0.3s'; setTimeout(()=>t.remove(),300); }, 4000);
+  }
+
+  // =================== CHAT ===================
+  function appendMsg(avatar, role, text, alertClass=''){
+    const c = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    div.innerHTML = `
+      <div class="msg-avatar">${avatar}</div>
+      <div class="msg-body">
+        <div class="msg-meta">${role==='user'?'You':role==='bot'?'TRAC Bot':'Alert Agent'} · ${now()}</div>
+        <div class="msg-text ${alertClass}">${text}</div>
+      </div>`;
+    c.appendChild(div);
+    c.scrollTop = c.scrollHeight;
+  }
+
+  function appendAlert(icon, tag, tagClass, title, body, alertClass){
+    const c = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = `msg bot`;
+    div.innerHTML = `
+      <div class="msg-avatar" style="background:rgba(255,214,10,0.1)">${icon}</div>
+      <div class="msg-body">
+        <div class="msg-meta">TRAC Alert Agent · ${now()}</div>
+        <div class="msg-text ${alertClass}">
+          <span class="alert-tag ${tagClass}">${tag}</span><br/>
+          <strong>${title}</strong><br/>
+          <span style="font-family:'Space Mono',monospace;font-size:12px;color:var(--muted);">${body}</span>
+        </div>
+      </div>`;
+    c.appendChild(div);
+    c.scrollTop = c.scrollHeight;
+    state.alertCount++;
+    document.getElementById('alert-count').textContent = state.alertCount;
+  }
+
+  function clearChat(){
+    const c = document.getElementById('chat-messages');
+    c.innerHTML = '';
+    appendMsg('🤖','bot','Chat cleared. Monitoring continues in background.');
+  }
+
+  // =================== PARSE CHAT COMMANDS ===================
+  function parseCommand(msg){
+    const m = msg.toLowerCase();
+    // "alert me if I receive more than X TNK"
+    const incMatch = m.match(/receive\s+more\s+than\s+(\d+)/);
+    if(incMatch){
+      document.getElementById('threshold-in').value = incMatch[1];
+      document.getElementById('rule-in').checked = true;
+      return `✅ Done! I'll alert you whenever you receive more than **${incMatch[1]} TNK**.`;
+    }
+    // "set large threshold to X"
+    const largeMatch = m.match(/large\s+(?:threshold|tx|transaction)\s+(?:to\s+)?(\d+)/);
+    if(largeMatch){
+      document.getElementById('threshold-large').value = largeMatch[1];
+      return `🐋 Whale alert threshold updated to **${largeMatch[1]} TNK**.`;
+    }
+    // "stop monitoring"
+    if(m.includes('stop') || m.includes('pause')) {
+      if(state.monitoring){ stopMonitoring(); return '🛑 Monitoring stopped.'; }
+      return 'Already stopped.';
+    }
+    // "what is my balance"
+    if(m.includes('balance')){ return `💰 Current balance: **${state.balance.toFixed(2)} TNK**`; }
+    // "how many alerts"
+    if(m.includes('alert') && (m.includes('how many') || m.includes('count'))){ return `🔔 ${state.alertCount} alerts fired since monitoring started.`; }
+    // status
+    if(m.includes('status')){ return state.monitoring ? `📡 Monitoring **${shortAddr(state.wallet)}** — Balance: ${state.balance.toFixed(2)} TNK` : 'Not monitoring any wallet.'; }
+
+    return `Got it! To configure alerts, try:\n• "Alert me if I receive more than X TNK"\n• "Set large threshold to X"\n• "What is my balance"\n• "Status"`;
+  }
+
+  function sendChat(){
+    const inp = document.getElementById('chat-input');
+    const msg = inp.value.trim();
+    if(!msg) return;
+    inp.value = '';
+    appendMsg('👤','user', msg);
+    setTimeout(()=>{
+      const reply = parseCommand(msg);
+      appendMsg('🤖','bot', reply.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>'));
+    }, 600);
+  }
+
+  // =================== WALLET ===================
+  function setWallet(){
+    const val = document.getElementById('wallet-input').value.trim();
+    if(!val){ showToast('⚠️','Invalid','Please enter a wallet address','yellow'); return; }
+    state.wallet = val;
+    state.balance = randomBetween(200, 5000);
+    state.prevBalance = state.balance;
+    startMonitoring();
+  }
+
+  function startMonitoring(){
+    if(state.monitoring) stopMonitoring();
+    state.monitoring = true;
+    state.alertCount = 0;
+    state.txCount = 0;
+
+    document.getElementById('status-dot').className = 'dot online';
+    document.getElementById('status-text').textContent = 'Monitoring active';
+    document.getElementById('wallet-display').textContent = shortAddr(state.wallet);
+    document.getElementById('balance-display').textContent = state.balance.toFixed(2);
+    document.getElementById('alert-count').textContent = '0';
+    document.getElementById('tx-count').textContent = '0';
+    document.getElementById('stop-btn').style.display = 'block';
+    document.getElementById('chat-status').textContent = '● Active';
+    document.getElementById('chat-status').style.color = 'var(--accent)';
+
+    appendMsg('🤖','bot',`<span class="alert-tag tag-bot">MONITORING STARTED</span><br/>Now watching <strong style="font-family:'Space Mono',monospace">${shortAddr(state.wallet)}</strong><br/>Balance: <strong>${state.balance.toFixed(2)} TNK</strong><br/>All alert rules active. Waiting for transactions...`);
+    showToast('📡','Monitoring Started', shortAddr(state.wallet), 'green');
+
+    // Clear TX list
+    document.getElementById('tx-list').innerHTML = '';
+
+    // Simulate transactions every 3–8 seconds
+    simulateTx();
+    state.interval = setInterval(simulateTx, randomBetween(3000, 8000));
+  }
+
+  function stopMonitoring(){
+    state.monitoring = false;
+    clearInterval(state.interval);
+    document.getElementById('status-dot').className = 'dot offline';
+    document.getElementById('status-text').textContent = 'Stopped';
+    document.getElementById('stop-btn').style.display = 'none';
+    document.getElementById('chat-status').textContent = '● Offline';
+    document.getElementById('chat-status').style.color = 'var(--muted)';
+    showToast('🛑','Monitoring Stopped','Alert system paused.','red');
+    appendMsg('🤖','bot','🛑 Monitoring stopped. Click "Monitor" again to resume.');
+  }
+
+  function updateRule(type, el){
+    state.rules[type] = el.checked;
+    const card = el.closest('.rule-card');
+    if(el.checked) card.classList.add('active');
+    else card.classList.remove('active');
+  }
+
+  // =================== SIMULATE TX ===================
+  function simulateTx(){
+    if(!state.monitoring) return;
+    const isIncoming = Math.random() > 0.4;
+    const amount = parseFloat(randomBetween(5, 1000).toFixed(2));
+    const from = randomInt(100000,999999)+'TRAC'+randomInt(100,999);
+    const hash = randomHash();
+
+    state.prevBalance = state.balance;
+    if(isIncoming) state.balance += amount;
+    else state.balance = Math.max(0, state.balance - amount);
+
+    state.txCount++;
+    document.getElementById('tx-count').textContent = state.txCount;
+    document.getElementById('balance-display').textContent = state.balance.toFixed(2);
+
+    // Add to TX feed
+    addTxItem(isIncoming, amount, from, hash);
+
+    // Evaluate alert rules
+    const rules = state.rules;
+    const thIn = parseFloat(document.getElementById('threshold-in').value)||0;
+    const thOut = parseFloat(document.getElementById('threshold-out').value)||0;
+    const thLarge = parseFloat(document.getElementById('threshold-large').value)||500;
+    const thDrop = parseFloat(document.getElementById('threshold-drop').value)||20;
+
+    if(isIncoming && rules.in && amount >= thIn){
+      appendAlert('📥','INCOMING TX','tag-in',
+        `+${amount} TNK Received`,
+        `From: ${from} · Hash: ${hash}`,
+        'alert');
+      showToast('📥','Incoming TX',`+${amount} TNK received`,'green');
+    }
+
+    if(!isIncoming && rules.out && amount >= thOut){
+      appendAlert('📤','OUTGOING TX','tag-out',
+        `-${amount} TNK Sent`,
+        `To: ${from} · Hash: ${hash}`,
+        'alert alert-danger');
+      showToast('📤','Outgoing TX',`-${amount} TNK sent`,'red');
+    }
+
+    if(amount >= thLarge && rules.large){
+      appendAlert('🐋','WHALE ALERT','tag-big',
+        `Large Transaction Detected: ${amount} TNK`,
+        `${isIncoming?'Incoming':'Outgoing'} whale TX · Hash: ${hash}`,
+        'alert alert-warn');
+      showToast('🐋','Whale Alert!',`${amount} TNK moved`,'yellow');
+    }
+
+    if(!isIncoming && rules.drop){
+      const dropPct = ((state.prevBalance - state.balance) / state.prevBalance * 100);
+      if(dropPct >= thDrop){
+        appendAlert('📉','BALANCE DROP','tag-drop',
+          `Balance dropped ${dropPct.toFixed(1)}%`,
+          `From ${state.prevBalance.toFixed(2)} → ${state.balance.toFixed(2)} TNK`,
+          'alert alert-danger');
+        showToast('📉','Balance Drop!',`-${dropPct.toFixed(1)}% balance dropped`,'red');
+      }
+    }
+
+    // Reschedule with random interval
+    clearInterval(state.interval);
+    state.interval = setInterval(simulateTx, randomBetween(3000, 9000));
+  }
+
+  function addTxItem(isIncoming, amount, from, hash){
+    const list = document.getElementById('tx-list');
+    const empty = list.querySelector('.empty');
+    if(empty) empty.remove();
+
+    const item = document.createElement('div');
+    item.className = 'tx-item';
+    item.innerHTML = `
+      <div class="tx-type ${isIncoming?'in':'out'}">${isIncoming?'📥':'📤'}</div>
+      <div>
+        <div class="tx-amount ${isIncoming?'in':'out'}">${isIncoming?'+':'-'}${amount} TNK</div>
+        <div class="tx-from">${isIncoming?'From':'To'}: ${from}</div>
+      </div>
+      <div class="tx-hash">${hash} · ${now()}</div>
+    `;
+    list.prepend(item);
+    // Keep max 20
+    const items = list.querySelectorAll('.tx-item');
+    if(items.length > 20) items[items.length-1].remove();
+  }
+
+  function clearTx(){
+    document.getElementById('tx-list').innerHTML = '<div class="empty"><div class="empty-icon">📡</div>Transaction feed cleared.</div>';
+  }
+
+  // Init active state on rule cards
+  document.querySelectorAll('.rule-card').forEach(c=>c.classList.add('active'));
+</script>
+</body>
+</html>
